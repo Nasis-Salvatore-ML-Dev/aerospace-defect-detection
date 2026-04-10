@@ -1,0 +1,44 @@
+# Data and models
+data/raw/
+data/processed/
+models/
+*.pkl
+*.h5
+*.onnx
+*.tflite
+
+# Notebooks
+.experiments/
+
+# Environment
+.env
+.env.*
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# GCP
+gcp-credentials.json
+service-account*.json
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
