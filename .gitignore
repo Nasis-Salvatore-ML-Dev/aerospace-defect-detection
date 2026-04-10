@@ -1,5 +1,7 @@
 # Documents
-docs/notes
+docs/useful_commands.md
+docs/runbook.md
+docs/bmw-pricing-runbook.md
 
 # Data and models
 data/raw/
@@ -11,13 +13,14 @@ models/
 *.tflite
 
 # Notebooks
-.experiments/
+experiments/
 
 # Environment
 .env
 .env.*
 venv/
 .venv/
+~/.aerospace-defect-detection/
 
 # Python
 __pycache__/
