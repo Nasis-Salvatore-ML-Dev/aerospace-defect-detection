@@ -1,0 +1,23 @@
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "8080:8080"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID:-local-dev}
+    volumes:
+      - ./src:/app/src # hot reload during development
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3

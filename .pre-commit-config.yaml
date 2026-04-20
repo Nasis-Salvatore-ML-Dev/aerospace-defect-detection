@@ -4,11 +4,10 @@ repos:
     hooks:
       - id: black
 
-  - repo: https://github.com/pycco-docs/pycco
-    rev: v0.6.0
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
     hooks:
       - id: isort
-        name: isort
 
   - repo: https://github.com/PyCQA/flake8
     rev: 7.0.0

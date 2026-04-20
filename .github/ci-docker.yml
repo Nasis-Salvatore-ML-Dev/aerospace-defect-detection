@@ -1,0 +1,47 @@
+name: Docker Build Check
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  docker-build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: aerospace-defect-detection:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test container
+        run: |
+          docker run -d \
+            --name test-container \
+            -p 8080:8080 \
+            aerospace-defect-detection:ci
+
+          # Wait for container to be ready
+          echo "Waiting for container to start..."
+          sleep 10
+
+          # Hit health endpoint
+          curl --fail --retry 3 --retry-delay 3 \
+            http://localhost:8080/health
+
+          # Clean up
+          docker stop test-container
+          docker rm test-container

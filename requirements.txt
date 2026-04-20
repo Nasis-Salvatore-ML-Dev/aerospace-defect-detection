@@ -1,14 +1,26 @@
-tensorflow==2.15.0
+# Core ML
+tensorflow==2.16.2
+keras==3.3.3
+numpy==1.26.3
+
+# API
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 pydantic==2.5.3
 python-multipart==0.0.7
 Pillow==10.2.0
-numpy==1.26.3
-google-cloud-firestore==2.14.0
+
+# GCP
+google-cloud-firestore==2.16.0
 google-cloud-logging==3.9.0
+
+# Model export
 onnx==1.15.0
 onnxruntime==1.17.0
 tf2onnx==1.16.1
+
+# Experiment tracking
 optuna==3.5.0
+
+# CLI
 click==8.1.7

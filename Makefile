@@ -1,7 +1,9 @@
 .PHONY: install lint format test clean
 
 install:
-	pip install -r requirements-dev.txt
+	pip install uv
+	uv pip install -r requirements.txt
+	uv pip install -r requirements-dev.txt
 	pre-commit install
 
 lint:
