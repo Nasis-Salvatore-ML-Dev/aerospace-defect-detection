@@ -17,15 +17,12 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Build image (no push)
-        uses: docker/build-push-action@v5
         with:
-          context: .
-          push: false
-          tags: aerospace-defect-detection:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          driver: docker
+
+      - name: Build image
+        run: |
+          docker build -t aerospace-defect-detection:ci .
 
       - name: Smoke test container
         run: |
@@ -34,14 +31,11 @@ jobs:
             -p 8080:8080 \
             aerospace-defect-detection:ci
 
-          # Wait for container to be ready
           echo "Waiting for container to start..."
-          sleep 10
+          sleep 15
 
-          # Hit health endpoint
           curl --fail --retry 3 --retry-delay 3 \
             http://localhost:8080/health
 
-          # Clean up
           docker stop test-container
           docker rm test-container
