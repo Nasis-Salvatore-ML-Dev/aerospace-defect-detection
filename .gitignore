@@ -7,6 +7,7 @@ docs/bmw-pricing-runbook.md
 data/raw/
 data/processed/
 models/
+!src/models/
 *.pkl
 *.h5
 *.onnx
