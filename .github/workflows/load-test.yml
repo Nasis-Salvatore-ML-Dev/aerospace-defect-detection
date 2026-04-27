@@ -1,0 +1,108 @@
+name: Load Test
+
+on:
+  push:
+    branches:
+      - staging
+  workflow_dispatch:
+    inputs:
+      users:
+        description: "Number of concurrent users"
+        required: false
+        default: "50"
+      run_time:
+        description: "Test duration (e.g. 60s, 2m)"
+        required: false
+        default: "60s"
+
+jobs:
+  load-test:
+    name: Locust Load Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv pip install --system locust pillow numpy
+
+      - name: Start API server (no model — health + schema validation only)
+        run: |
+          uv pip install --system \
+            fastapi uvicorn[standard] pydantic \
+            google-cloud-firestore starlette
+          uvicorn src.api.app:app --host 0.0.0.0 --port 8000 &
+          echo "Waiting for API to start..."
+          sleep 5
+          curl --fail http://localhost:8000/health || exit 1
+          echo "API is up."
+
+      - name: Run Locust load test (headless)
+        run: |
+          locust \
+            -f locustfile.py \
+            --host=http://localhost:8000 \
+            --users=${{ github.event.inputs.users || '50' }} \
+            --spawn-rate=5 \
+            --run-time=${{ github.event.inputs.run_time || '60s' }} \
+            --headless \
+            --csv=locust_results \
+            --exit-code-on-error=1
+
+      - name: Print summary
+        if: always()
+        run: |
+          echo "=== Load Test Results ==="
+          if [ -f locust_results_stats.csv ]; then
+            cat locust_results_stats.csv
+          fi
+
+      - name: Upload load test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: |
+            locust_results_stats.csv
+            locust_results_failures.csv
+          retention-days: 30
+
+      - name: Check SLA — p99 < 500ms
+        run: |
+          python - <<'EOF'
+          import csv
+          import sys
+
+          stats_file = "locust_results_stats.csv"
+          violations = []
+
+          try:
+              with open(stats_file) as f:
+                  reader = csv.DictReader(f)
+                  for row in reader:
+                      name = row.get("Name", "")
+                      if name == "Aggregated":
+                          continue
+                      p99 = float(row.get("99%", 0))
+                      if p99 > 500:
+                          violations.append(f"{name}: p99={p99:.0f}ms (limit: 500ms)")
+          except FileNotFoundError:
+              print("No stats file found — skipping SLA check.")
+              sys.exit(0)
+
+          if violations:
+              print("SLA VIOLATIONS (p99 > 500ms):")
+              for v in violations:
+                  print(f"  {v}")
+              sys.exit(1)
+          else:
+              print("All endpoints within SLA (p99 < 500ms).")
+          EOF
