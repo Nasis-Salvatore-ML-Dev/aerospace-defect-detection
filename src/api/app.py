@@ -47,6 +47,8 @@ from src.api.schemas import (
     MetricsResponse,
 )
 
+NUM_CLASSES = 8  # must match DefectClass enum in schemas.py
+
 # ---------------------------------------------------------------------------
 # Module-level logger
 # Configured by configure_logging() in lifespan — do not call basicConfig here.
@@ -540,33 +542,80 @@ async def predict_batch(
     tags=["Explainability"],
     summary="Grad-CAM heatmap for the most recent prediction on this image",
 )
-async def explain(filename: str) -> ExplainResponse:
+async def explain(
+    filename: str,
+    image_base64: str,
+    class_index: int = 1,
+    alpha: float = 0.4,
+) -> ExplainResponse:
     """
-    Return a Grad-CAM heatmap explaining the most recent prediction
-    for the specified image filename.
+    Return a Grad-CAM heatmap explaining the model's prediction.
 
-    **Status: stub — implemented in Week 4 (Day 20).**
+    Args:
+        filename:     Original image filename (for logging).
+        image_base64: Base64-encoded image string.
+        class_index:  Class index to explain (from /predict response).
+        alpha:        Heatmap overlay opacity [0, 1]. Default 0.4.
 
-    Grad-CAM (Gradient-weighted Class Activation Mapping) highlights
-    the image regions that most influenced the model's decision.  For
-    aerospace inspection, this is critical: an engineer reviewing a
-    'crack' prediction needs to see *where* the crack was detected.
-
-    The heatmap is returned as a base64-encoded PNG overlaid on the
-    original image.  The client renders it as:
-        <img src="data:image/png;base64,{gradcam_heatmap_base64}">
-
-    Reference: Selvaraju et al. (2017), "Grad-CAM: Visual Explanations
-    from Deep Networks via Gradient-based Localization."
+    Returns:
+        ExplainResponse with base64-encoded PNG heatmap overlaid on input.
     """
-    # Week 4 implementation will:
-    # 1. Retrieve the original image bytes from a short-lived in-memory cache
-    # 2. Run a second forward pass collecting intermediate layer activations
-    # 3. Compute Grad-CAM heatmap via src/models/gradcam.py
-    # 4. Overlay heatmap on original image using OpenCV / PIL
-    # 5. Base64-encode the result and return
+    _require_model()
 
-    raise HTTPException(
-        status_code=501,
-        detail="Grad-CAM explainability endpoint is implemented in Week 4. Stay tuned.",
+    import base64 as _base64
+
+    from src.models.gradcam import gradcam_to_base64
+
+    # Decode base64 image
+    try:
+        image_bytes = _base64.b64decode(image_base64)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid base64 image: {exc}",
+        )
+
+    # Validate class index
+    if class_index < 0 or class_index >= NUM_CLASSES:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"class_index {class_index} out of range. "
+                f"Must be between 0 and {NUM_CLASSES - 1}."
+            ),
+        )
+
+    try:
+        heatmap_base64 = gradcam_to_base64(
+            model=MODEL_STORE["model"],
+            image_bytes=image_bytes,
+            class_index=class_index,
+            alpha=alpha,
+        )
+    except Exception as exc:
+        logger.error("Grad-CAM failed for file=%s: %s", filename, exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Grad-CAM computation failed: {exc}",
+        )
+
+    # Run inference to get the prediction being explained
+    predicted_class, confidence, _ = _run_inference(image_bytes)
+
+    logger.info(
+        "Grad-CAM explanation generated",
+        extra={
+            "filename": filename,
+            "class_index": class_index,
+            "predicted_class": predicted_class.value,
+            "confidence": round(confidence, 4),
+        },
+    )
+
+    return ExplainResponse(
+        filename=filename,
+        predicted_class=predicted_class,
+        confidence=confidence,
+        gradcam_heatmap_base64=heatmap_base64,
+        model_version=MODEL_STORE["version"],
     )
