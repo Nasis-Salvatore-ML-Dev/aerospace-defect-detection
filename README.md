@@ -2,7 +2,7 @@
 
 CNN-based visual inspection system for aerospace components. Detects and classifies surface defects (cracks, scratches, contamination, structural deformation) in component images and localizes them with Grad-CAM heatmaps.
 
-Phase 2 of a five-phase ML engineering portfolio. Training in progress — benchmark results and model metrics will be updated after the Colab training run.
+Phase 2 of a five-phase ML engineering portfolio.
 
 ---
 
@@ -17,10 +17,26 @@ Manual visual inspection of aerospace components misses defects at rates of 5–
 A transfer learning pipeline built on EfficientNetB0 that:
 
 - classifies component images into 8 categories (good + 7 defect types)
-- penalises missed defects 10x more than false alarms via a custom severity-weighted loss
 - explains predictions with Grad-CAM heatmaps showing where the defect was detected
 - exports to ONNX and INT8 TFLite for constrained deployment on edge hardware
 - serves predictions via a production REST API with full MLOps instrumentation
+
+---
+
+## Model performance (v1.2)
+
+Trained on Google Colab T4 GPU. Dataset: MVTec AD aerospace subset.
+
+| Metric                   | Value                                |
+| ------------------------ | ------------------------------------ |
+| val_accuracy             | 55% (8-class, random baseline 12.5%) |
+| test_accuracy            | 100%\*                               |
+| Training time            | 10 min (Colab T4 GPU)                |
+| Train / val / test split | 656 / 91 / 50 images                 |
+
+\*Test set contains 50 images — interpret with caution.
+
+Latency benchmark results (p50 / p95 / p99): pending export run.
 
 ---
 
@@ -35,7 +51,7 @@ EfficientNetB0 backbone (ImageNet pretrained)
       ↓
 Custom head: GAP → BatchNorm → Dense(256) → Dropout(0.3) → Softmax(8)
       ↓
-Severity-weighted cross-entropy loss
+Standard cross-entropy loss
       ↓
 SavedModel → ONNX → TFLite INT8
       ↓
@@ -52,13 +68,13 @@ Firestore (experiment tracking) + TensorBoard (training curves)
 
 **Why transfer learning.** The available dataset has roughly 500 labeled images per defect category — not enough to train a CNN from scratch. EfficientNetB0 pretrained on ImageNet already knows how to detect edges, textures, and shapes. Those features transfer to surface defect detection. Training from scratch on this dataset would overfit immediately.
 
-**Two-phase training protocol.** Phase 1 freezes the backbone entirely and trains only the classification head (LR 1e-3, 10 epochs). This avoids destroying pretrained weights before the head has learned anything useful. Phase 2 unfreezes the top 30 backbone layers and fine-tunes at LR 1e-4. BatchNorm layers stay frozen throughout — updating their running statistics on a small dataset destabilises training.
+**Two-phase training protocol.** Phase 1 freezes the backbone entirely and trains only the classification head (LR 1e-3, 20 epochs). This avoids destroying pretrained weights before the head has learned anything useful. Phase 2 unfreezes the top 20 backbone layers and fine-tunes at LR 1e-4. BatchNorm layers stay frozen throughout — updating their running statistics on a small dataset destabilises training.
 
-**Severity-weighted loss.** SeverityWeightedCrossEntropy multiplies each sample's loss by its class weight before averaging. Defect classes receive weight 10.0, the "good" class receives 1.0. The optimiser updates weights more aggressively on defect misclassifications. Primary metric is recall, not accuracy.
+**Custom loss functions.** SeverityWeightedCrossEntropy and FocalLoss are implemented as keras.losses.Loss subclasses with get_config() for full serialisation. On a dataset of this size, standard cross-entropy was used for training v1.2 — the custom loss is available for larger datasets where class imbalance is severe enough to benefit from it.
 
 **Grad-CAM without third-party libraries.** Implemented directly using tf.GradientTape. Records the last convolutional layer activations during the forward pass, computes gradients of the predicted class score with respect to those activations, global-average-pools the gradients to get one importance weight per channel, takes the weighted sum, applies ReLU to keep only positive contributions, upsamples to image size.
 
-**Model compression.** The trained SavedModel exports to ONNX (opset 13) and TFLite with INT8 post-training quantisation. INT8 reduces model size approximately 4x and speeds up inference 2–4x on ARM CPUs. Latency benchmarked at p50/p95/p99 across all three formats. Results pending training run.
+**Model compression.** The trained SavedModel exports to ONNX (opset 13) and TFLite with INT8 post-training quantisation. INT8 reduces model size approximately 4x and speeds up inference 2-4x on ARM CPUs. Latency benchmarked at p50/p95/p99 across all three formats.
 
 **Firestore experiment tracking.** Every training run writes a document to Firestore before training starts and updates it on completion or failure. All Firestore writes fail silently — training never crashes because the metadata store is unavailable.
 
@@ -68,7 +84,7 @@ Firestore (experiment tracking) + TensorBoard (training curves)
 
 | Layer               | Technology                                                         |
 | ------------------- | ------------------------------------------------------------------ |
-| Model               | TensorFlow 2.16 / Keras, EfficientNetB0                            |
+| Model               | TensorFlow / Keras 3, EfficientNetB0                               |
 | Training            | Google Colab (T4 GPU)                                              |
 | Export              | tf2onnx, TFLite converter, INT8 quantisation                       |
 | API                 | FastAPI, Uvicorn, Pydantic v2                                      |
@@ -147,7 +163,7 @@ curl -X POST http://localhost:8080/predict \
     "hole": 0.0,
     "broken": 0.01
   },
-  "model_version": "v1.0",
+  "model_version": "v1.2",
   "processing_time_ms": 28.4,
   "filename": "blade_042.jpg"
 }
@@ -165,7 +181,7 @@ python -m venv ~/.aerospace-defect-detection
 source ~/.aerospace-defect-detection/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 
-# Run API (model_loaded=false until training is complete)
+# Run API (model_loaded=false until model file is present)
 uvicorn src.api.app:app --reload --port 8080
 
 # Tests
@@ -184,12 +200,12 @@ Runs on Google Colab (free T4 GPU). Not supported on CPU.
 
 ```bash
 python src/models/train.py \
-  --data-dir data/mvtec_aerospace \
-  --model-version v1.0 \
-  --epochs-head 10 \
-  --epochs-finetune 20 \
-  --batch-size 32 \
-  --unfreeze-layers 30
+  --data-dir data/mvtec_aerospace_remapped \
+  --model-version v1.2 \
+  --epochs-head 20 \
+  --epochs-finetune 30 \
+  --batch-size 16 \
+  --unfreeze-layers 20
 ```
 
 ---
@@ -198,14 +214,12 @@ python src/models/train.py \
 
 ```bash
 python src/models/export.py \
-  --savedmodel-dir models/saved_model/v1.0 \
+  --savedmodel-dir models/saved_model/v1.2 \
   --output-dir models/exports \
-  --model-version v1.0 \
+  --model-version v1.2 \
   --quantize \
   --benchmark
 ```
-
-Latency benchmark results (p50 / p95 / p99): pending training run.
 
 ---
 
@@ -227,12 +241,12 @@ Download: https://www.mvtec.com/company/research/datasets/mvtec-ad — CC BY-NC-
 
 ## Portfolio context
 
-| Phase | Focus                                          | Status      |
-| ----- | ---------------------------------------------- | ----------- |
-| 1     | Classical ML — XGBoost car pricing (BMW/Aures) | Complete    |
-| 2     | Deep learning — aerospace defect detection     | In progress |
-| 3+4   | Production ML + EU AI Act compliance           | Planned     |
-| 5     | LLMOps                                         | Planned     |
+| Phase | Focus                                          | Status   |
+| ----- | ---------------------------------------------- | -------- |
+| 1     | Classical ML — XGBoost car pricing (BMW/Aures) | Complete |
+| 2     | Deep learning — aerospace defect detection     | Complete |
+| 3+4   | Production ML + EU AI Act compliance           | Planned  |
+| 5     | LLMOps                                         | Planned  |
 
 ---
 
