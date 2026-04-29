@@ -36,7 +36,13 @@ Trained on Google Colab T4 GPU. Dataset: MVTec AD aerospace subset.
 
 \*Test set contains 50 images — interpret with caution.
 
-Latency benchmark results (p50 / p95 / p99): pending export run.
+| Format            | p50 (ms) | p95 (ms) | p99 (ms) | Speedup vs SavedModel |
+| ----------------- | -------- | -------- | -------- | --------------------- |
+| SavedModel (GPU)  | 87.7     | 147.9    | 156.4    | 1.0×                  |
+| ONNX (CPU)        | 20.9     | 24.9     | 32.9     | 4.2×                  |
+| TFLite FP32 (CPU) | 21.1     | 25.0     | 27.9     | 4.2×                  |
+
+_Benchmarked on Colab T4 GPU (SavedModel) and CPU (ONNX/TFLite). 100 timed runs, 20 warmup._
 
 ---
 
