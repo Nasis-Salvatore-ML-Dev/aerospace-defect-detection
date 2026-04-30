@@ -38,8 +38,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install --system --strict -r requirements.txt
-          uv pip install --system --strict -r requirements-dev.txt
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Run formatter check (black)
         run: black --check src/ tests/
