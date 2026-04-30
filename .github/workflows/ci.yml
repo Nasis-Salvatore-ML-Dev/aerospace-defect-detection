@@ -38,9 +38,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install --system --resolution=highest -r requirements.txt
-          pip install python-multipart==0.0.20
-          uv pip install --system -r requirements-dev.txt
+          uv pip install --system --strict -r requirements.txt
+          uv pip install --system --strict -r requirements-dev.txt
 
       - name: Run formatter check (black)
         run: black --check src/ tests/
