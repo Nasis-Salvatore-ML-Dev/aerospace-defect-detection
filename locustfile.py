@@ -156,7 +156,6 @@ class AerospaceInspectionUser(HttpUser):
 
     Task weights reflect realistic usage patterns:
     - /predict:        70% of requests (core workload)
-    - /predict/upload: 15% of requests (alternative client pattern)
     - /health:         10% of requests (monitoring probes)
     - /metrics:         3% of requests (dashboard scrapes)
     - /explain:         2% of requests (engineer review of flagged parts)
@@ -215,29 +214,6 @@ class AerospaceInspectionUser(HttpUser):
                 }
                 if not required_keys.issubset(data.keys()):
                     response.failure(f"Missing keys in response: {data.keys()}")
-
-    @task(15)
-    def predict_upload(self) -> None:
-        """
-        POST /predict/upload — multipart file upload.
-
-        Tests the file upload code path, which uses different FastAPI
-        machinery than the JSON body endpoint.
-        """
-        image_b64 = random.choice(_IMAGE_POOL)
-        image_bytes = base64.b64decode(image_b64)
-        filename = random.choice(_DEFECT_FILENAMES)
-
-        with self.client.post(
-            "/predict/upload",
-            files={"file": (filename, image_bytes, "image/jpeg")},
-            catch_response=True,
-            name="/predict/upload",
-        ) as response:
-            if response.status_code not in (200, 503):
-                response.failure(
-                    f"Unexpected status {response.status_code}: {response.text[:200]}"
-                )
 
     @task(10)
     def health_check(self) -> None:
