@@ -11,12 +11,13 @@ Grad-CAM (Gradient-weighted Class Activation Mapping) answers the question:
 "Which parts of this image caused the model to predict 'crack'?"
 
 It works by:
-1. Running a forward pass and recording the activations of the last
-   convolutional layer (the final feature maps before GAP).
+1. Running a forward pass and recording the activations of the LAST
+   convolutional layer (the final feature maps before GAP): that's what
+    we target (high-level, task specific patterns)
 2. Computing the gradient of the predicted class score with respect to
    those feature maps via backpropagation.
-3. Global-average-pooling the gradients to get one importance weight
-   per feature map channel.
+3. Global-average-pooling the GRADIENTS (not the activations) to get
+       one importance weight per feature map channel.
 4. Taking a weighted sum of the feature maps using those weights.
 5. Applying ReLU to keep only positive contributions.
 6. Upsampling the resulting heatmap to the original image size.

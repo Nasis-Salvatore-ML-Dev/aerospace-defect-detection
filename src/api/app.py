@@ -139,7 +139,9 @@ def _load_model() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Configure logging, load model at startup; log shutdown."""
+    """Configure logging, load model at startup; log shutdown.
+    Loads the model into memory
+    """
     configure_logging(log_dir="logs")
     logger.info("Aerospace Defect Detection API starting up")
     _load_model()
